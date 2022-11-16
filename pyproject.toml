@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "case1"
+version = "0.1.0"
+description = "Best reco project"
+authors = ["K.Pribludenko <kir88@inbox.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.87.0"
+uvicorn = "^0.19.0"
+pydantic = "^1.10.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
