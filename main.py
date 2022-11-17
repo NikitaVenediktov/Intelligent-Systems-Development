@@ -1,10 +1,16 @@
+import pandas as pd
 from typing import List
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from models.models import *
+
 app = FastAPI()
 
+df_iter = pd.read_csv('./data_original/interactions.csv', parse_dates=['last_watch_dt'])
+
+recolist_pop14d = pop_14d(df_iter)
 
 class RecoResponse(BaseModel):
     user_id: int
@@ -17,8 +23,8 @@ async def root():
 
 @app.get("/reco/{model_name}/{user_id}", response_model=RecoResponse)
 async def get_reco(model_name: str, user_id: int) -> RecoResponse:
-    if model_name == 'mmm':
-        reco_list = list(range(10))
+    if model_name == 'pop14d':
+        reco_list = recolist_pop14d
     else:
         reco_list = list(range(10))[::-1]
     
