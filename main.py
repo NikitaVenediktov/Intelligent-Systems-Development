@@ -1,8 +1,10 @@
+import os
 import pandas as pd
 from typing import List
 
 from fastapi import FastAPI
 from pydantic import BaseModel
+import uvicorn
 
 from models.models import *
 
@@ -34,3 +36,11 @@ async def get_reco(model_name: str, user_id: int) -> RecoResponse:
     )
 
     return reco
+
+
+if __name__ == "__main__":
+
+    host = os.getenv("HOST", "192.168.89.10")
+    port = int(os.getenv("PORT", "8080"))
+
+    uvicorn.run(app, host=host, port=port)
