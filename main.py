@@ -2,11 +2,24 @@ import os
 import pandas as pd
 from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 import uvicorn
 
 from models.models import *
+
+API_KEY = "reco_mts_best"
+MODEL_LIST = ['pop14d']
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+def api_key_auth(api_key: str = Depends(oauth2_scheme)):
+    if api_key != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Forbidden"
+        )
 
 app = FastAPI()
 
@@ -18,17 +31,22 @@ class RecoResponse(BaseModel):
     user_id: int
     items: List[int]
 
-@app.get("/health")
+@app.get("/health", dependencies=[Depends(api_key_auth)])
 async def root():
-    return "Живее всех живых"
+    return "Im still alive"
 
 
-@app.get("/reco/{model_name}/{user_id}", response_model=RecoResponse)
+@app.get("/reco/{model_name}/{user_id}", response_model=RecoResponse, 
+                                         dependencies=[Depends(api_key_auth)])
 async def get_reco(model_name: str, user_id: int) -> RecoResponse:
-    if model_name == 'pop14d':
-        reco_list = recolist_pop14d
+    if model_name not in MODEL_LIST:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This model is not exist"
+        )
     else:
-        reco_list = list(range(10))[::-1]
+        if model_name == 'pop14d':
+            reco_list = recolist_pop14d
     
     reco = RecoResponse(
         user_id = user_id,
