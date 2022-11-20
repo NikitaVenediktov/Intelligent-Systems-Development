@@ -1,14 +1,14 @@
-'''
+"""
 Starting service of recomendation via FastAPI
-'''
+"""
 
 import os
 from typing import List
 
 import pandas as pd
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, FastAPI, HTTPException, status, Security
+from fastapi.security.api_key import APIKey, APIKeyHeader, APIKeyQuery
 from pydantic import BaseModel
 
 from models.models import *
@@ -16,11 +16,28 @@ from models.models import *
 API_KEY = "reco_mts_best"
 MODEL_LIST = ["pop14d"]
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+class RecoResponse(BaseModel):
+    user_id: int
+    items: List[int]
 
 
-def api_key_auth(api_key: str = Depends(oauth2_scheme)):
-    if api_key != API_KEY:
+df_iter = pd.read_csv("./data_original/interactions.csv", parse_dates=["last_watch_dt"])
+recolist_pop14d = pop_14d(df_iter)
+
+api_key_query = APIKeyQuery(name="api_key", auto_error=False)
+api_key_header = APIKeyHeader(name="api_key", auto_error=False)
+
+
+async def get_api_key(
+    api_key_from_query: str = Security(api_key_query),
+    api_key_from_header: str = Security(api_key_header),
+) -> str:
+    if api_key_from_query == API_KEY:
+        return api_key_from_query
+    elif api_key_from_header == API_KEY:
+        return api_key_from_header
+    else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Forbidden"
         )
@@ -28,30 +45,21 @@ def api_key_auth(api_key: str = Depends(oauth2_scheme)):
 
 app = FastAPI()
 
-df_iter = pd.read_csv("./data_original/interactions.csv", parse_dates=["last_watch_dt"])
 
-recolist_pop14d = pop_14d(df_iter)
-
-
-class RecoResponse(BaseModel):
-    user_id: int
-    items: List[int]
-
-
-@app.get(
-    "/health", 
-    dependencies=[Depends(api_key_auth)]
-)
+@app.get("/health")
 async def root():
     return "Im still alive"
 
 
 @app.get(
-    "/reco/{model_name}/{user_id}",
+    path="/reco/{model_name}/{user_id}",
     response_model=RecoResponse,
-    dependencies=[Depends(api_key_auth)],
 )
-async def get_reco(model_name: str, user_id: int) -> RecoResponse:
+async def get_reco(
+    model_name: str, 
+    user_id: int, 
+    api_key: APIKey = Depends(get_api_key)
+) -> RecoResponse:
     if model_name not in MODEL_LIST:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="This model is not exist"
