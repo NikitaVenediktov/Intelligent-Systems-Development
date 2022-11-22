@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, status, Security
 from fastapi.security.api_key import APIKey, APIKeyHeader, APIKeyQuery
 from pydantic import BaseModel
 
-from models.models import *
+from models.models import pop_14d
 
 API_KEY = "reco_mts_best"
 MODEL_LIST = ["pop14d"]
@@ -22,7 +22,8 @@ class RecoResponse(BaseModel):
     items: List[int]
 
 
-df_iter = pd.read_csv("./data_original/interactions.csv", parse_dates=["last_watch_dt"])
+df_iter = pd.read_csv("./data_original/interactions.csv",
+                      parse_dates=["last_watch_dt"])
 recolist_pop14d = pop_14d(df_iter)
 
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
@@ -56,13 +57,14 @@ async def root():
     response_model=RecoResponse,
 )
 async def get_reco(
-    model_name: str, 
-    user_id: int, 
+    model_name: str,
+    user_id: int,
     api_key: APIKey = Depends(get_api_key)
 ) -> RecoResponse:
     if model_name not in MODEL_LIST:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="This model is not exist"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This model is not exist"
         )
     else:
         if model_name == "pop14d":
