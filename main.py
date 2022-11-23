@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, status, Security
 from fastapi.security.api_key import APIKey, APIKeyHeader, APIKeyQuery
 from pydantic import BaseModel
 
-from models.models import pop_14d
+from models.models import pop_items_last_14d
 
 API_KEY = "reco_mts_best"
 MODEL_LIST = ["pop14d"]
@@ -22,9 +22,9 @@ class RecoResponse(BaseModel):
     items: List[int]
 
 
-df_iter = pd.read_csv("./data_original/interactions.csv",
-                      parse_dates=["last_watch_dt"])
-recolist_pop14d = pop_14d(df_iter)
+df_inter = pd.read_csv("./data_original/interactions.csv",
+                       parse_dates=["last_watch_dt"])
+recolist_pop14d = pop_items_last_14d(df_inter)
 
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
 api_key_header = APIKeyHeader(name="api_key", auto_error=False)
