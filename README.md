@@ -12,3 +12,9 @@ http://127.0.0.1:8000/reco/kek/12
 http://127.0.0.1:8000/reco/lol/12
 {"user_id":12,"items":[9,8,7,6,5,4,3,2,1,0]}
 ```
+
+На убунту20.04 rectools встала после (конкретно проблему с implicit=0.4.4 фиксит):
+```python
+sudo apt-get install g++ 
+poetry add rectools
+```

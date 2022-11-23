@@ -128,5 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-#10 lectures 
+#lectures 
 itmo_recsys_2022
+HWs/HW2/data_original
