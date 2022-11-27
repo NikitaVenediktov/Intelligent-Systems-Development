@@ -9,6 +9,7 @@ import pandas as pd
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status, Security
 from fastapi.security.api_key import APIKey, APIKeyHeader, APIKeyQuery
+from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from models.models import pop_items_last_14d
@@ -45,6 +46,7 @@ async def get_api_key(
 
 
 app = FastAPI()
+client = TestClient(app)
 
 
 @app.get("/health")
@@ -77,7 +79,8 @@ async def get_reco(
 
 if __name__ == "__main__":
 
-    host = os.getenv("HOST", "192.168.89.10")
+    # host = os.getenv("HOST", "192.168.89.10")  # Вариант для сервера Кирилла
+    host = os.getenv("HOST", "127.0.0.1")  # Если у себя тестить
     port = int(os.getenv("PORT", "8080"))
 
     uvicorn.run(app, host=host, port=port)
