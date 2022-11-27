@@ -95,8 +95,8 @@ async def get_reco(
 
 if __name__ == "__main__":
 
-    # host = os.getenv("HOST", "192.168.89.10")  # Вариант для сервера Кирилла
-    host = os.getenv("HOST", "127.0.0.1")  # Если у себя тестить
+    host = os.getenv("HOST", "192.168.89.10")  # Вариант для сервера Кирилла
+    # host = os.getenv("HOST", "127.0.0.1")  # Если у себя тестить
     port = int(os.getenv("PORT", "8080"))
 
     uvicorn.run(app, host=host, port=port)
