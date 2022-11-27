@@ -18,4 +18,5 @@ http://127.0.0.1:8000/reco/kek/12
 sudo apt-get install g++ 
 poetry add rectools
 ```
+
 Для теста нужно просто запустить в консоли pytest, пока он только проверить /health
