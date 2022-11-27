@@ -33,7 +33,6 @@ df_inter = df_inter.rename(
 )
 
 recolist_pop14d = pop_items_last_14d(df_inter)
-recolist_for_cold_users = mix_popular_items(df_inter, 10)
 
 df_final_reco = pd.read_pickle("./models/user_knn/final_reco.pickle")
 
@@ -84,6 +83,7 @@ async def get_reco(
             reco_list = recolist_pop14d
         elif model_name == "user_knn_v1":
             if user_id not in df_final_reco.index:
+                recolist_for_cold_users = mix_popular_items(df_inter, 10)
                 reco_list = recolist_for_cold_users
             else:
                 reco_list = df_final_reco.loc[user_id, "item_id"]
