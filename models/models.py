@@ -24,14 +24,15 @@ def pop_items_last_14d(df_inter: pd.DataFrame) -> list:
 
     min_date = df["datetime"].max().normalize() - pd.DateOffset(DAYS)
     recommendations = (
-        df.loc[df["datetime"] > min_date, "item_id"]
-          .value_counts().head(K).index.values
+        df.loc[df["datetime"] > min_date, "item_id"].value_counts().head(K).index.values
     )
 
     return list(recommendations)
 
 
-def mix_popular_items(df_inter: pd.DataFrame, number: int) -> list:
+def full_reco_items_list(
+    df_inter: pd.DataFrame, arr_reco_after_model: list, number: int
+) -> list:
     """
     Return list consisting of input number(max=10) mix of popular items.
     near 50% of items - from list top 10 last 30 days
@@ -39,16 +40,15 @@ def mix_popular_items(df_inter: pd.DataFrame, number: int) -> list:
     near 20% of items - from list top 10 for all time
     """
     df = df_inter.copy()
+    CONST_K = 10
 
     # np.array top@k pop for different periods
     def popoular_number_of_items_days(
-        df: pd.DataFrame, k: int = 10, days: int = 14, all_time: bool = False
+        df: pd.DataFrame, k: int = CONST_K, days: int = 14, all_time: bool = False
     ) -> np.array:
         """
         Return a np.array of top@k most popular items for last N days
         """
-        recommendations = []
-
         if all_time is True:
             recommendations = df.loc[:, "item_id"].value_counts().head(k).index.values
         else:
@@ -62,23 +62,30 @@ def mix_popular_items(df_inter: pd.DataFrame, number: int) -> list:
         return recommendations
 
     # all duplicates will be deleting and adding some items from pop_all_time
-    def del_repeat_items(arr_mix_pop: np.array) -> np.array:
+    def del_repeat_items(full_arr_mix_pop: np.array, k: int = CONST_K) -> np.array:
         """
         Delete all duplicates items in array
         """
-        if len(set(arr_mix_pop)) == number:
-            return arr_mix_pop
-        else:
-            i = number - len(set(arr_mix_pop))
-            arr_mix_pop = np.concatenate(
-                (arr_mix_pop, np.random.choice(pop_all_time, i, replace=False))
-            )
-            return del_repeat_items(arr_mix_pop)
+        size_of_array = np.unique(full_arr_mix_pop).size
 
-    arr_mix_pop = np.array([])
-    pop_30d = popoular_number_of_items_days(df, k=10, days=30)
-    pop_90d = popoular_number_of_items_days(df, k=10, days=90)
-    pop_all_time = popoular_number_of_items_days(df, k=10, all_time=True)
+        if size_of_array == k:
+            return full_arr_mix_pop
+        else:
+            # delete duplicates and save the order of items
+            full_arr_mix_pop = full_arr_mix_pop[
+                np.sort(np.unique(full_arr_mix_pop, return_index=True)[1])
+            ]
+            # add new items from pop_all_time
+            i = k - size_of_array
+            full_arr_mix_pop = np.concatenate(
+                (full_arr_mix_pop, np.random.choice(pop_all_time, i, replace=False))
+            )
+            return del_repeat_items(full_arr_mix_pop)
+
+    full_arr_mix_pop = np.array([])
+    pop_30d = popoular_number_of_items_days(df, k=CONST_K, days=30)
+    pop_90d = popoular_number_of_items_days(df, k=CONST_K, days=90)
+    pop_all_time = popoular_number_of_items_days(df, k=CONST_K, all_time=True)
 
     if number == 1:
         i, j, k = 1, 0, 0
@@ -101,20 +108,20 @@ def mix_popular_items(df_inter: pd.DataFrame, number: int) -> list:
     elif number == 10:
         i, j, k = 5, 3, 2
     else:
-        arr_mix_pop = np.array([])
-        return list(arr_mix_pop)
+        return list(arr_reco_after_model)
 
-    arr_mix_pop = np.concatenate(
+    full_arr_mix_pop = np.concatenate(
         (
+            np.array(arr_reco_after_model),
             np.random.choice(pop_30d, i, replace=False),
             np.random.choice(pop_90d, j, replace=False),
             np.random.choice(pop_all_time, k, replace=False),
         )
     )
 
-    arr_mix_pop = del_repeat_items(arr_mix_pop)
+    full_arr_mix_pop = del_repeat_items(full_arr_mix_pop)
 
-    return list(set(arr_mix_pop))
+    return list(full_arr_mix_pop)
 
 
 class my_UserKnn:
@@ -235,13 +242,14 @@ class my_UserKnn:
         recs = recs[recs["rank"] <= 10]
 
         final_reco = recs.groupby("user_id").agg({"item_id": list})
-        # очень долгое выполнение около 5 часов для полного датасета
-        final_reco["item_id"] = final_reco["item_id"].apply(
-            lambda x: x + mix_popular_items(train, N_recs - len(x))
+        # very long execution about 5 hours for a full dataset
+        final_reco.loc[:, "item_id"] = final_reco.loc[:, "item_id"].apply(
+            lambda x: full_reco_items_list(train, np.array(x), (10 - len(x)))
         )
-        final_reco.to_pickle("final_reco.pickle")
+        # saving table for offline prediction
+        final_reco.to_pickle("./user_knn/final_reco.pickle")
 
-        # преобразование таблицы для метрик
+        # transforming a table to calculate metrics
         my_reco = final_reco.explode("item_id")
         my_reco["rank"] = my_reco.groupby("user_id").cumcount() + 1
         my_reco = my_reco.reset_index()
