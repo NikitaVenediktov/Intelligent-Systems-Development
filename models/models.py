@@ -1,124 +1,87 @@
 """
 Reco Models
 """
-
 from collections import Counter
 from typing import Dict
 
 import numpy as np
 import pandas as pd
 import scipy as sp
-from implicit.nearest_neighbours import ItemItemRecommender
+import dill
+from implicit.nearest_neighbours import ItemItemRecommender, CosineRecommender
+from rectools import Columns
 
-K = 10
-DAYS = 14
 
-
-def pop_items_last_14d(df_inter: pd.DataFrame) -> list:
+# For HW1********************************************************************
+def popoular_number_of_items_days(
+    df: pd.DataFrame, k: int = 10, days: int = 14, all_time: bool = False
+) -> list:
     """
-    1st - return a list of top10 most popular items for last 14 days
+    Return a list of top@k most popular items for last N days
     """
-
-    recommendations = []
-    df = df_inter.copy()
-
-    min_date = df["datetime"].max().normalize() - pd.DateOffset(DAYS)
-    recommendations = (
-        df.loc[df["datetime"] > min_date, "item_id"].value_counts().head(K).index.values
-    )
-
+    if all_time is True:
+        recommendations = df.loc[:, "item_id"].value_counts().head(k).index.values
+    else:
+        min_date = df["datetime"].max().normalize() - pd.DateOffset(days)
+        recommendations = (
+            df.loc[df["datetime"] > min_date, "item_id"]
+            .value_counts()
+            .head(k)
+            .index.values
+        )
     return list(recommendations)
 
 
+# For HW3********************************************************************
+# Load table of interactions and lists of popular items for last 14 days
+df_inter = pd.read_csv(
+    "./data_original/interactions.csv", parse_dates=["last_watch_dt"]
+)
+df_inter = df_inter.rename(
+    columns={"last_watch_dt": Columns.Datetime, "total_dur": Columns.Weight}
+)
+list_pop_items_14d = popoular_number_of_items_days(df_inter, days=14)
+
+
 def full_reco_items_list(
-    df_inter: pd.DataFrame, arr_reco_after_model: list, number: int
+    arr_reco_after_model: np.array, pop_array: np.array, number: int
 ) -> list:
     """
-    Return list consisting of input number(max=10) mix of popular items.
-    near 50% of items - from list top 10 last 30 days
-    near 30% of items - from list top 10 last 90 days
-    near 20% of items - from list top 10 for all time
+    Add number of items from pop_array to arr_reco_after_model.
+    Return array of 10 unique items
     """
-    df = df_inter.copy()
+
     CONST_K = 10
 
-    # np.array top@k pop for different periods
-    def popoular_number_of_items_days(
-        df: pd.DataFrame, k: int = CONST_K, days: int = 14, all_time: bool = False
-    ) -> np.array:
-        """
-        Return a np.array of top@k most popular items for last N days
-        """
-        if all_time is True:
-            recommendations = df.loc[:, "item_id"].value_counts().head(k).index.values
-        else:
-            min_date = df["datetime"].max().normalize() - pd.DateOffset(days)
-            recommendations = (
-                df.loc[df["datetime"] > min_date, "item_id"]
-                .value_counts()
-                .head(k)
-                .index.values
-            )
-        return recommendations
+    size_of_array = np.unique(arr_reco_after_model).size
+    if size_of_array == CONST_K:
+        return arr_reco_after_model
 
-    # all duplicates will be deleting and adding some items from pop_all_time
+    # all duplicates will be deleting and adding some items from pop_array
     def del_repeat_items(full_arr_mix_pop: np.array, k: int = CONST_K) -> np.array:
         """
         Delete all duplicates items in array
         """
-        size_of_array = np.unique(full_arr_mix_pop).size
 
-        if size_of_array == k:
+        size_of_array = np.unique(full_arr_mix_pop).size
+        if size_of_array == CONST_K:
             return full_arr_mix_pop
         else:
             # delete duplicates and save the order of items
             full_arr_mix_pop = full_arr_mix_pop[
                 np.sort(np.unique(full_arr_mix_pop, return_index=True)[1])
             ]
-            # add new items from pop_all_time
+            # add new items from pop_array
             i = k - size_of_array
             full_arr_mix_pop = np.concatenate(
-                (full_arr_mix_pop, np.random.choice(pop_all_time, i, replace=False))
+                (full_arr_mix_pop, np.random.choice(pop_array, i, replace=False))
             )
             return del_repeat_items(full_arr_mix_pop)
 
     full_arr_mix_pop = np.array([])
-    pop_30d = popoular_number_of_items_days(df, k=CONST_K, days=30)
-    pop_90d = popoular_number_of_items_days(df, k=CONST_K, days=90)
-    pop_all_time = popoular_number_of_items_days(df, k=CONST_K, all_time=True)
-
-    if number == 1:
-        i, j, k = 1, 0, 0
-    elif number == 2:
-        i, j, k = 1, 1, 0
-    elif number == 3:
-        i, j, k = 2, 1, 0
-    elif number == 4:
-        i, j, k = 2, 1, 1
-    elif number == 5:
-        i, j, k = 3, 1, 1
-    elif number == 6:
-        i, j, k = 3, 2, 1
-    elif number == 7:
-        i, j, k = 4, 2, 1
-    elif number == 8:
-        i, j, k = 4, 2, 2
-    elif number == 9:
-        i, j, k = 5, 2, 2
-    elif number == 10:
-        i, j, k = 5, 3, 2
-    else:
-        return list(arr_reco_after_model)
-
     full_arr_mix_pop = np.concatenate(
-        (
-            np.array(arr_reco_after_model),
-            np.random.choice(pop_30d, i, replace=False),
-            np.random.choice(pop_90d, j, replace=False),
-            np.random.choice(pop_all_time, k, replace=False),
-        )
+        (arr_reco_after_model, pop_array[:number])
     )
-
     full_arr_mix_pop = del_repeat_items(full_arr_mix_pop)
 
     return list(full_arr_mix_pop)
@@ -129,9 +92,12 @@ class my_UserKnn:
     based on ItemKNN model from implicit.nearest_neighbours
     """
 
-    def __init__(self, model: ItemItemRecommender, N_users: int = 50):
+    def __init__(
+        self, model: ItemItemRecommender, list_pop_items: list, N_users: int = 50
+    ):
         self.N_users = N_users
         self.model = model
+        self.list_pop_items_14d = list_pop_items
         self.is_fitted = False
 
     def get_mappings(self, train):
@@ -209,7 +175,7 @@ class my_UserKnn:
 
         return _recs_mapper
 
-    def predict(self, train: pd.DataFrame, test: pd.DataFrame, N_recs: int = 10):
+    def predict(self, test: pd.DataFrame, N_recs: int = 10) -> list:
 
         if not self.is_fitted:
             raise ValueError("Please call fit before predict")
@@ -226,7 +192,7 @@ class my_UserKnn:
         recs = recs.set_index("user_id").apply(pd.Series.explode).reset_index()
 
         recs = (
-            recs[~(recs["sim"] >= 1)]
+            recs[~(recs["user_id"] == recs["sim_user_id"])]
             .merge(
                 self.watched, left_on=["sim_user_id"], right_on=["user_id"], how="left"
             )
@@ -239,19 +205,32 @@ class my_UserKnn:
         recs["score"] = recs["sim"] * recs["idf"]
         recs = recs.sort_values(["user_id", "score"], ascending=False)
         recs["rank"] = recs.groupby("user_id").cumcount() + 1
-        recs = recs[recs["rank"] <= 10]
+        recs = recs[recs["rank"] <= N_recs]
 
+        # Transforming table and add lacking items(to 10) to each user if it is needed
         final_reco = recs.groupby("user_id").agg({"item_id": list})
-        # very long execution about 5 hours for a full dataset
-        final_reco.loc[:, "item_id"] = final_reco.loc[:, "item_id"].apply(
-            lambda x: full_reco_items_list(train, np.array(x), (10 - len(x)))
+        final_reco["item_id"] = final_reco.loc[:, "item_id"].apply(
+            lambda x: full_reco_items_list(
+                np.array(x), np.array(self.list_pop_items_14d), (10 - len(x))
+            )
         )
-        # saving table for offline prediction
-        final_reco.to_pickle("./user_knn/final_reco.pickle")
 
-        # transforming a table to calculate metrics
-        my_reco = final_reco.explode("item_id")
-        my_reco["rank"] = my_reco.groupby("user_id").cumcount() + 1
-        my_reco = my_reco.reset_index()
+        reco_for_user = final_reco.loc[test["user_id"].unique(), "item_id"]
 
-        return my_reco
+        return list(reco_for_user.iloc[0])
+
+
+def main():
+    model_user_knn = my_UserKnn(CosineRecommender(), list_pop_items_14d, 50)
+    model_user_knn.fit(df_inter)
+
+    # save model
+    with open("./models/user_knn/model_user_knn.dill", "wb") as f:
+        dill.dump(model_user_knn, f)
+
+
+# For HW4********************************************************************
+
+
+if __name__ == "__main__":
+    main()

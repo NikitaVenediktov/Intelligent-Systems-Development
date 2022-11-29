@@ -6,7 +6,9 @@ import os
 from typing import List
 
 import pandas as pd
+import numpy as np
 import uvicorn
+import dill
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security.api_key import APIKey, APIKeyHeader, APIKeyQuery
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -14,7 +16,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 from rectools import Columns
 
-from models.models import mix_popular_items, pop_items_last_14d
+from models.models import popoular_number_of_items_days, full_reco_items_list
 
 API_KEY = "reco_mts_best"
 MODEL_LIST = ["pop14d", "user_knn_v1"]
@@ -25,16 +27,20 @@ class RecoResponse(BaseModel):
     items: List[int]
 
 
+# Load table of interactions and lists of popular items for last 14 days
 df_inter = pd.read_csv(
     "./data_original/interactions.csv", parse_dates=["last_watch_dt"]
 )
 df_inter = df_inter.rename(
     columns={"last_watch_dt": Columns.Datetime, "total_dur": Columns.Weight}
 )
+recolist_pop14d = popoular_number_of_items_days(df_inter)
+recolist_for_cold_users = recolist_pop14d
 
-recolist_pop14d = pop_items_last_14d(df_inter)
+# Load fitted model for online predictions
+with open("./models/user_knn/model_user_knn.dill", "rb") as f:
+    model_user_knn = dill.load(f)
 
-df_final_reco = pd.read_pickle("./models/user_knn/final_reco.pickle")
 
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
 api_key_header = APIKeyHeader(name="api_key", auto_error=False)
@@ -44,7 +50,7 @@ token_bearer = HTTPBearer(auto_error=False)
 async def get_api_key(
     api_key_from_query: str = Security(api_key_query),
     api_key_from_header: str = Security(api_key_header),
-    token: HTTPAuthorizationCredentials = Security(token_bearer)
+    token: HTTPAuthorizationCredentials = Security(token_bearer),
 ) -> str:
     if api_key_from_query == API_KEY:
         return api_key_from_query
@@ -67,10 +73,7 @@ async def root():
     return "Im still alive"
 
 
-@app.get(
-    path="/reco/{model_name}/{user_id}",
-    response_model=RecoResponse,
-)
+@app.get(path="/reco/{model_name}/{user_id}", response_model=RecoResponse)
 async def get_reco(
     model_name: str, user_id: int, api_key: APIKey = Depends(get_api_key)
 ) -> RecoResponse:
@@ -82,11 +85,15 @@ async def get_reco(
         if model_name == "pop14d":
             reco_list = recolist_pop14d
         elif model_name == "user_knn_v1":
-            if user_id not in df_final_reco.index:
-                recolist_for_cold_users = mix_popular_items(df_inter, 10)
-                reco_list = recolist_for_cold_users
+            if user_id in df_inter["user_id"].unique():
+                print()
+                # In case for online predictions
+                one_user_df = df_inter[df_inter["user_id"] == user_id][
+                    ["user_id", "item_id"]
+                ]
+                reco_list = model_user_knn.predict(one_user_df, 10)
             else:
-                reco_list = df_final_reco.loc[user_id, "item_id"]
+                reco_list = recolist_for_cold_users
 
     reco = RecoResponse(user_id=user_id, items=reco_list)
 
