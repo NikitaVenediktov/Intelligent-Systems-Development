@@ -22,6 +22,7 @@ httpx = "^0.23.1"
 scipy = "^1.9.3"
 dill = "^0.3.6"
 gunicorn = "^20.1.0"
+python-dotenv = "^0.21.0"
 
 [tool.poetry.dev-dependencies]
 ipykernel = "^6.18.0"
