@@ -61,7 +61,9 @@ client = TestClient(app)
 
 
 # Load table of interactions and lists of popular items for last 14 days
-df_inter = pd.read_csv(DATA_DIR / "interactions.csv", parse_dates=["last_watch_dt"])
+df_inter = pd.read_csv(DATA_DIR / "interactions.csv",
+                       parse_dates=["last_watch_dt"]
+)
 df_inter = df_inter.rename(
     columns={"last_watch_dt": Columns.Datetime, "total_dur": Columns.Weight}
 )
@@ -84,7 +86,6 @@ class CustomUnpickler(dill.Unpickler):
     def find_class(self, module, name):
         if name == "my_UserKnn":
             from models.train_knn import my_UserKnn
-
             return my_UserKnn
         return super().find_class(module, name)
 

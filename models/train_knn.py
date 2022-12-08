@@ -19,7 +19,8 @@ DATA_DIR = BASE_DIR / "data_original"
 
 
 # Load table of interactions need to save model
-df_inter = pd.read_csv(DATA_DIR / "interactions.csv", parse_dates=["last_watch_dt"])
+df_inter = pd.read_csv(DATA_DIR / "interactions.csv",
+                       parse_dates=["last_watch_dt"])
 df_inter = df_inter.rename(
     columns={"last_watch_dt": Columns.Datetime, "total_dur": Columns.Weight}
 )
@@ -67,7 +68,6 @@ class my_UserKnn:
             )
         )
 
-        self.watched = df.groupby(user_col).agg({item_col: list})
         return interaction_matrix
 
     def idf(self, n: int, x: float):
@@ -78,20 +78,31 @@ class my_UserKnn:
         item_idf = pd.DataFrame.from_dict(
             item_cnt, orient="index", columns=["doc_freq"]
         ).reset_index()
-        item_idf["idf"] = item_idf["doc_freq"].apply(lambda x: self.idf(self.n, x))
+        item_idf["idf"] = item_idf["doc_freq"].apply(
+                            lambda x: self.idf(self.n, x)
+        )
         self.item_idf = item_idf
 
     def fit(self, train: pd.DataFrame):
         self.user_knn = self.model
         self.get_mappings(train)
         self.weights_matrix = self.get_matrix(
-            train, users_mapping=self.users_mapping, items_mapping=self.items_mapping
+            train, users_mapping=self.users_mapping,
+            items_mapping=self.items_mapping
         )
 
         self.n = train.shape[0]
         self._count_item_idf(train)
 
         self.user_knn.fit(self.weights_matrix)
+        #  Вынесли просмотренные айтемы, чтобы ускорить предикт
+        watched_items_df = (train.groupby("user_id")
+                                 .agg({"item_id": list})
+                                 .reset_index())
+        self.watched_items = {}
+        for _, row in watched_items_df.iterrows():
+            self.watched_items[row["user_id"]] = row["item_id"]
+
         self.is_fitted = True
 
     def _generate_recs_mapper(
@@ -122,18 +133,16 @@ class my_UserKnn:
         recs = pd.DataFrame({"user_id": test["user_id"].unique()})
         recs["sim_user_id"], recs["sim"] = zip(*recs["user_id"].map(mapper))
         recs = recs.set_index("user_id").apply(pd.Series.explode).reset_index()
-
-        recs = (
-            recs[~(recs["user_id"] == recs["sim_user_id"])]
-            .merge(
-                self.watched, left_on=["sim_user_id"], right_on=["user_id"], how="left"
-            )
-            .explode("item_id")
-            .sort_values(["user_id", "sim"], ascending=False)
-            .drop_duplicates(["user_id", "item_id"], keep="first")
-            .merge(self.item_idf, left_on="item_id", right_on="index", how="left")
+        recs = recs[recs["user_id"] != recs["sim_user_id"]]
+        recs["item_id"] = recs["user_id"].apply(
+            lambda x: self.watched_items.get(x, [])
         )
-
+        recs = recs.explode("item_id")
+        recs = recs.sort_values(["user_id", "sim"], ascending=False)
+        recs = recs.drop_duplicates(["user_id", "item_id"], keep="first")
+        recs = recs.merge(
+            self.item_idf, left_on="item_id", right_on="index", how="left"
+        )
         recs["score"] = recs["sim"] * recs["idf"]
         recs = recs.sort_values(["user_id", "score"], ascending=False)
         recs["rank"] = recs.groupby("user_id").cumcount() + 1
