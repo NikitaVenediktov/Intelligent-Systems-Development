@@ -9,6 +9,7 @@ from typing import List
 
 import dill
 import pandas as pd
+import numpy as np
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security, status
@@ -69,6 +70,7 @@ df_inter = df_inter.rename(
 )
 recolist_pop14d = popular_number_of_items_days(df_inter)
 recolist_for_cold_users = recolist_pop14d
+unique_user_id_arr = np.unique(df_inter["user_id"].values)
 
 
 class CustomUnpickler(dill.Unpickler):
@@ -111,12 +113,17 @@ def get_reco(
         if model_name == "pop14d":
             reco_list = recolist_pop14d
         elif model_name == "user_knn_v1":
-            if user_id in df_inter["user_id"].unique():
+            import time
+            start_time = time.time()
+            if user_id in unique_user_id_arr:
                 # In case for online predictions
+                print('Time1:', time.time() - start_time)
                 one_user_df = df_inter[df_inter["user_id"] == user_id][
                     ["user_id", "item_id"]
                 ]
+                print('Time2:', time.time() - start_time)
                 reco_list = knn_make_predict(knn_model, one_user_df, recolist_pop14d)
+                print('Time3:', time.time() - start_time)
             else:
                 reco_list = recolist_for_cold_users
 
