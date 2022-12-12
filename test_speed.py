@@ -6,10 +6,10 @@ import requests
 from tqdm import tqdm
 
 # url = "http://localhost:8080/reco/pop14d/"
-# url = "http://95.165.161.126:777/reco/pop14d/"
+# url = "http://<external ip>:<port>/reco/pop14d/"
 
 # url = "http://localhost:8080/reco/user_knn_v1/"
-# url = "http://95.165.161.126:777/reco/user_knn_v1/"
+# url = "http://<external ip>:<port>/reco/user_knn_v1/"
 
 
 headers = {
@@ -30,7 +30,7 @@ headers = {
 # ******ASYNC REQUESTS******
 
 async def fetch(s, url):
-    async with s.get(f'http://95.165.161.126:777/reco/user_knn_v1/{url}', headers=headers) as r:
+    async with s.get(f'http://<external ip>:<port>/reco/user_knn_v1/{url}', headers=headers) as r:
         if r.status != 200:
             r.raise_for_status()
         return await r.text()
